@@ -1,7 +1,3 @@
-// Copyright 2013 The Gorilla WebSocket Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
 package main
 
 import (
@@ -10,12 +6,23 @@ import (
 )
 
 func main() {
-	hub := newHub()
+	lobbies := make(map[string]*Hub)
 
-	go hub.run()
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		log.Println(r.URL.Path)
 
-	http.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		serveWs(hub, w, r)
+		lobby := r.URL.Path[1:]
+
+		if r.URL.Path == "/" {
+			lobby = "default"
+		}
+
+		if _, ok := lobbies[lobby]; !ok {
+			lobbies[lobby] = newHub()
+			go lobbies[lobby].run()
+		}
+
+		serveWs(lobbies[lobby], w, r)
 	})
 
 	err := http.ListenAndServe(":3000", nil)
