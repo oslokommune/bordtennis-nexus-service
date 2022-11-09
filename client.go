@@ -6,6 +6,8 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -76,6 +78,13 @@ func (c *Client) readPump() {
 			break
 		}
 
+		err = validateMessage(message)
+		if err != nil {
+			log.Printf("invalid message: %v", err)
+
+			continue
+		}
+
 		message = bytes.TrimSpace(bytes.Replace(message, newline, space, -1))
 
 		c.previousMessage = message
@@ -139,6 +148,22 @@ func (c *Client) writePump() {
 			}
 		}
 	}
+}
+
+func validateMessage(message []byte) error {
+	var item Message
+
+	err := json.Unmarshal(message, &item)
+	if err != nil {
+		return fmt.Errorf("unmarshalling: %w", err)
+	}
+
+	err = item.Validate()
+	if err != nil {
+		return fmt.Errorf("validating: %w", err)
+	}
+
+	return nil
 }
 
 // serveWs handles websocket requests from the peer.
