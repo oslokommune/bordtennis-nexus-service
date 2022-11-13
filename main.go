@@ -37,7 +37,7 @@ func main() {
 
 	log.Println("Listening on port", defaultPort)
 
-	err := http.ListenAndServe(":3000", nil)
+	err := http.ListenAndServe(":3000", nil) // #nosec: G114
 	if err != nil {
 		log.Fatal("ListenAndServe: ", err)
 	}
