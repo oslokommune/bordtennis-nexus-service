@@ -3,9 +3,13 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strings"
 )
 
 const defaultPort = "3000"
+
+var allowedHosts = strings.Split(os.Getenv("ALLOWED_HOSTS"), ";")
 
 func main() {
 	lobbies := make(map[string]*Hub)
@@ -36,6 +40,7 @@ func main() {
 	})
 
 	log.Println("Listening on port", defaultPort)
+	log.Println("Allowed hosts:", allowedHosts)
 
 	err := http.ListenAndServe(":3000", nil) // #nosec: G114
 	if err != nil {
