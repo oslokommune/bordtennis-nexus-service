@@ -10,3 +10,22 @@ This can enable IOT devices to manipulate the scoreboards, or to present a score
 ## Usage
 
 Use `make run` to start the server locally. The server will be available at http://localhost:3000.
+
+## Stack
+
+- [Golang](https://golang.org/)
+- [Gorilla Websocket](https://github.com/gorilla/websocket)
+- [Fly.io](https://fly.io/)
+
+## Contribute
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md)
+
+## Production pipeline
+
+```mermaid
+flowchart LR
+    A[Push to main] ==> B[Github Actions]
+		B ==> C[Fly.io]
+		click C href "https://fly.io" "Open fly.io"
+```
