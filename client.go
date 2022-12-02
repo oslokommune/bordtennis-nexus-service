@@ -51,9 +51,6 @@ type Client struct {
 
 	// Buffered channel of outbound messages.
 	send chan []byte
-
-	// previousMessage is the last message sent from the client.
-	previousMessage []byte
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -106,8 +103,6 @@ func (c *Client) readPump() {
 
 		message = bytes.TrimSpace(bytes.ReplaceAll(message, newline, space))
 
-		c.previousMessage = message
-
 		c.hub.broadcast <- message
 	}
 }
@@ -145,12 +140,6 @@ func (c *Client) writePump() {
 				}
 
 				return
-			}
-
-			if c.previousMessage != nil && bytes.Equal(message, c.previousMessage) {
-				c.previousMessage = nil
-
-				continue
 			}
 
 			w, err := c.conn.NextWriter(websocket.TextMessage)
