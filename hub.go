@@ -4,6 +4,8 @@
 
 package main
 
+import "github.com/rs/zerolog/log"
+
 // Hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
@@ -31,15 +33,26 @@ func newHub() *Hub {
 
 func (h *Hub) run() {
 	for {
+		event := log.Debug()
+
 		select {
 		case client := <-h.register:
+			event.Str("event", "register")
+
 			h.clients[client] = true
 		case client := <-h.unregister:
+			event.Str("event", "unregister")
+
 			if _, ok := h.clients[client]; ok {
+				event.Str("event", "unregister:ok")
+
 				delete(h.clients, client)
 				close(client.send)
 			}
 		case message := <-h.broadcast:
+			event.Str("event", "broadcast")
+			event.RawJSON("message", message)
+
 			for client := range h.clients {
 				select {
 				case client.send <- message:
@@ -49,5 +62,7 @@ func (h *Hub) run() {
 				}
 			}
 		}
+
+		event.Msg("hub:run()")
 	}
 }
