@@ -8,9 +8,8 @@ ENV CGO_ENABLED=0
 RUN go mod download
 
 COPY main.go .
-COPY hub.go .
 COPY message.go .
-COPY client.go .
+COPY pkg/ pkg/
 
 RUN go build -a -installsuffix cgo -o service .
 

@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/oslokommune/bordtennis-nexus-service/pkg/client"
+	"github.com/oslokommune/bordtennis-nexus-service/pkg/hub"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -17,7 +19,7 @@ var allowedHosts = strings.Split(os.Getenv("ALLOWED_HOSTS"), ";")
 func main() {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	lobbies := make(map[string]*Hub)
+	lobbies := make(map[string]*hub.Hub)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		event := log.Info()
@@ -33,13 +35,13 @@ func main() {
 		if _, ok := lobbies[lobby]; !ok {
 			event.Msg("Creating new lobby")
 
-			lobbies[lobby] = newHub()
-			go lobbies[lobby].run()
+			lobbies[lobby] = hub.New()
+			go lobbies[lobby].Run()
 		}
 
 		event.Msg("Serving existing lobby")
 
-		serveWs(lobbies[lobby], w, r)
+		client.ServeWebsocket(lobbies[lobby], w, r, allowedHosts)
 	})
 
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {

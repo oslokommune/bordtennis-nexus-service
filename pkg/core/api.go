@@ -1,16 +1,19 @@
-package main
+package core
 
 import "fmt"
 
 const (
-	// typeBumpTeam is used to increase the score of a team by 1. Bump team expects "team1" or "team2" as payload.
-	typeBumpTeam = "bump-team"
+	// TypeBumpTeam is used to increase the score of a team by 1. Bump team expects "team1" or "team2" as payload.
+	TypeBumpTeam = "bump-team"
 
 	// Reset is a special type that is used to reset the score to 0-0. Reset expects no payload
-	typeReset = "reset"
+	TypeReset = "reset"
+
+	// TypeStatus is used to get the current score
+	TypeStatus = "status"
 )
 
-var allTypes = []string{typeBumpTeam, typeReset}
+var allTypes = []string{TypeBumpTeam, TypeReset, TypeStatus}
 
 type Message struct {
 	// Origin identifies the source of the event, usually an UUID
@@ -25,14 +28,4 @@ func (m *Message) Validate() error {
 	}
 
 	return nil
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
-	}
-
-	return false
 }

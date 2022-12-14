@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package main
+package client
 
 import (
 	"bytes"
@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/oslokommune/bordtennis-nexus-service/pkg/core"
+	"github.com/oslokommune/bordtennis-nexus-service/pkg/hub"
 )
 
 const (
@@ -37,20 +39,17 @@ var (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		return contains(allowedHosts, r.Header.Get("Origin"))
-	},
 }
 
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub *Hub
+	hub *hub.Hub
 
 	// The websocket connection.
 	conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
-	send chan []byte
+	Send chan []byte
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -60,7 +59,7 @@ type Client struct {
 // reads from this goroutine.
 func (c *Client) readPump() {
 	defer func() {
-		c.hub.unregister <- c
+		c.hub.Unregister <- c
 
 		err := c.conn.Close()
 		if err != nil {
@@ -103,7 +102,7 @@ func (c *Client) readPump() {
 
 		message = bytes.TrimSpace(bytes.ReplaceAll(message, newline, space))
 
-		c.hub.broadcast <- message
+		c.hub.Broadcast <- message
 	}
 }
 
@@ -126,7 +125,7 @@ func (c *Client) writePump() {
 
 	for {
 		select {
-		case message, ok := <-c.send:
+		case message, ok := <-c.Send:
 			err := c.conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err != nil {
 				log.Printf("error: %v", err)
@@ -153,14 +152,14 @@ func (c *Client) writePump() {
 			}
 
 			// Add queued chat messages to the current websocket message.
-			n := len(c.send)
+			n := len(c.Send)
 			for i := 0; i < n; i++ {
 				_, err = w.Write(newline)
 				if err != nil {
 					log.Printf("error: %v", err)
 				}
 
-				_, err = w.Write(<-c.send)
+				_, err = w.Write(<-c.Send)
 				if err != nil {
 					log.Printf("error: %v", err)
 				}
@@ -183,7 +182,7 @@ func (c *Client) writePump() {
 }
 
 func validateMessage(message []byte) error {
-	var item Message
+	var item core.Message
 
 	err := json.Unmarshal(message, &item)
 	if err != nil {
@@ -198,8 +197,16 @@ func validateMessage(message []byte) error {
 	return nil
 }
 
-// serveWs handles websocket requests from the peer.
-func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
+func originChecker(allowedHosts []string) func(*http.Request) bool {
+	return func(r *http.Request) bool {
+		return contains(allowedHosts, r.Header.Get("Origin"))
+	}
+}
+
+// ServeWs handles websocket requests from the peer.
+func ServeWebsocket(hub *hub.Hub, w http.ResponseWriter, r *http.Request, allowedHosts []string) {
+	upgrader.CheckOrigin = originChecker(allowedHosts)
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println(err)
@@ -207,8 +214,8 @@ func serveWs(hub *Hub, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256)}
-	client.hub.register <- client
+	client := &Client{hub: hub, conn: conn, Send: make(chan []byte, 256)}
+	client.hub.Register <- client
 
 	// Allow collection of memory referenced by the caller by doing all work in
 	// new goroutines.
