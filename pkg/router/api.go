@@ -3,7 +3,6 @@ package router
 import (
 	"net/http"
 
-	"github.com/oslokommune/bordtennis-nexus-service/pkg/client"
 	"github.com/oslokommune/bordtennis-nexus-service/pkg/hub"
 	"github.com/rs/zerolog/log"
 )
@@ -34,7 +33,7 @@ func New(allowedHosts []string) *http.ServeMux {
 
 		event.Msg("Serving existing lobby")
 
-		client.ServeWebsocket(lobbies[lobby], w, r, allowedHosts)
+		serveWebsocket(lobbies[lobby], w, r, allowedHosts)
 	})
 
 	return router

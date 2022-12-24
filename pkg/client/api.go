@@ -9,12 +9,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
 	"github.com/oslokommune/bordtennis-nexus-service/pkg/core"
-	"github.com/oslokommune/bordtennis-nexus-service/pkg/hub"
 )
 
 const (
@@ -36,20 +34,16 @@ var (
 	space   = []byte{' '}
 )
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-}
-
 // Client is a middleman between the websocket connection and the hub.
 type Client struct {
-	hub *hub.Hub
-
 	// The websocket connection.
-	conn *websocket.Conn
+	Conn *websocket.Conn
 
 	// Buffered channel of outbound messages.
 	Send chan []byte
+
+	UnregisterFn func()
+	BroadcastFn  func(message []byte)
 }
 
 // readPump pumps messages from the websocket connection to the hub.
@@ -57,25 +51,25 @@ type Client struct {
 // The application runs readPump in a per-connection goroutine. The application
 // ensures that there is at most one reader on a connection by executing all
 // reads from this goroutine.
-func (c *Client) readPump() {
+func (c *Client) ReadPump() {
 	defer func() {
-		c.hub.Unregister <- c
+		c.UnregisterFn()
 
-		err := c.conn.Close()
+		err := c.Conn.Close()
 		if err != nil {
 			log.Printf("error: %v", err)
 		}
 	}()
 
-	c.conn.SetReadLimit(maxMessageSize)
+	c.Conn.SetReadLimit(maxMessageSize)
 
-	err := c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	err := c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 	if err != nil {
 		log.Printf("error: %v", err)
 	}
 
-	c.conn.SetPongHandler(func(string) error {
-		err = c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	c.Conn.SetPongHandler(func(string) error {
+		err = c.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		if err != nil {
 			log.Printf("error: %v", err)
 		}
@@ -84,7 +78,7 @@ func (c *Client) readPump() {
 	})
 
 	for {
-		_, message, err := c.conn.ReadMessage()
+		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
 			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
 				log.Printf("error: %v", err)
@@ -102,7 +96,7 @@ func (c *Client) readPump() {
 
 		message = bytes.TrimSpace(bytes.ReplaceAll(message, newline, space))
 
-		c.hub.Broadcast <- message
+		c.BroadcastFn(message)
 	}
 }
 
@@ -111,13 +105,13 @@ func (c *Client) readPump() {
 // A goroutine running writePump is started for each connection. The
 // application ensures that there is at most one writer to a connection by
 // executing all writes from this goroutine.
-func (c *Client) writePump() {
+func (c *Client) WritePump() {
 	ticker := time.NewTicker(pingPeriod)
 
 	defer func() {
 		ticker.Stop()
 
-		err := c.conn.Close()
+		err := c.Conn.Close()
 		if err != nil {
 			log.Printf("error: %v", err)
 		}
@@ -126,14 +120,14 @@ func (c *Client) writePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			err := c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err != nil {
 				log.Printf("error: %v", err)
 			}
 
 			if !ok {
 				// The hub closed the channel.
-				err = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				err = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				if err != nil {
 					log.Printf("error: %v", err)
 				}
@@ -141,7 +135,7 @@ func (c *Client) writePump() {
 				return
 			}
 
-			w, err := c.conn.NextWriter(websocket.TextMessage)
+			w, err := c.Conn.NextWriter(websocket.TextMessage)
 			if err != nil {
 				return
 			}
@@ -169,12 +163,12 @@ func (c *Client) writePump() {
 				return
 			}
 		case <-ticker.C:
-			err := c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			err := c.Conn.SetWriteDeadline(time.Now().Add(writeWait))
 			if err != nil {
 				log.Printf("error: %v", err)
 			}
 
-			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
 		}
@@ -195,30 +189,4 @@ func validateMessage(message []byte) error {
 	}
 
 	return nil
-}
-
-func originChecker(allowedHosts []string) func(*http.Request) bool {
-	return func(r *http.Request) bool {
-		return contains(allowedHosts, r.Header.Get("Origin"))
-	}
-}
-
-// ServeWs handles websocket requests from the peer.
-func ServeWebsocket(hub *hub.Hub, w http.ResponseWriter, r *http.Request, allowedHosts []string) {
-	upgrader.CheckOrigin = originChecker(allowedHosts)
-
-	conn, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println(err)
-
-		return
-	}
-
-	client := &Client{hub: hub, conn: conn, Send: make(chan []byte, 256)}
-	client.hub.Register <- client
-
-	// Allow collection of memory referenced by the caller by doing all work in
-	// new goroutines.
-	go client.writePump()
-	go client.readPump()
 }

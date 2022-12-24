@@ -55,7 +55,7 @@ func (h *Hub) Run() {
 
 			h.clients[client] = true
 
-			client.send <- []byte(status.Serialize(h.gameStatus))
+			client.Send <- []byte(status.Serialize(h.gameStatus))
 		case client := <-h.Unregister:
 			logEvent.Str("event", "unregister")
 
@@ -63,7 +63,7 @@ func (h *Hub) Run() {
 				logEvent.Str("event", "unregister:ok")
 
 				delete(h.clients, client)
-				close(client.send)
+				close(client.Send)
 			}
 		case message := <-h.Broadcast:
 			msg := core.Message{}
@@ -81,9 +81,9 @@ func (h *Hub) Run() {
 
 			for client := range h.clients {
 				select {
-				case client.send <- message:
+				case client.Send <- message:
 				default:
-					close(client.send)
+					close(client.Send)
 					delete(h.clients, client)
 				}
 			}
