@@ -55,7 +55,20 @@ func (h *Hub) Run() {
 
 			h.clients[client] = true
 
-			client.Send <- []byte(status.Serialize(h.gameStatus))
+			msg := core.Message{
+				Origin:  "server",
+				Type:    core.TypeStatus,
+				Payload: status.Serialize(h.gameStatus),
+			}
+
+			rawMessage, err := json.Marshal(msg)
+			if err != nil {
+				logEvent.Err(err).Msg("failed to marshal message")
+
+				continue
+			}
+
+			client.Send <- rawMessage
 		case client := <-h.Unregister:
 			logEvent.Str("event", "unregister")
 
