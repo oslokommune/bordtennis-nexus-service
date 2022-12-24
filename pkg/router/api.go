@@ -27,7 +27,7 @@ func New(allowedHosts []string) *http.ServeMux {
 		if _, ok := lobbies[lobby]; !ok {
 			event.Msg("Creating new lobby")
 
-			lobbies[lobby] = hub.New()
+			lobbies[lobby] = hub.New(lobby)
 			go lobbies[lobby].Run()
 		}
 

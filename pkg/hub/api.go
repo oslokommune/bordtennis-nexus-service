@@ -17,6 +17,7 @@ import (
 // Hub maintains the set of active clients and broadcasts messages to the
 // clients.
 type Hub struct {
+	lobby      string
 	gameStatus status.Data
 
 	// Registered clients.
@@ -32,17 +33,19 @@ type Hub struct {
 	Unregister chan *client.Client
 }
 
-func New() *Hub {
-	statusData := status.Data{}
-	status.Reset(&statusData)
-
-	return &Hub{
-		gameStatus: statusData,
+func New(lobby string) *Hub {
+	hub := &Hub{
+		lobby:      lobby,
+		gameStatus: status.Data{},
 		Register:   make(chan *client.Client),
 		Unregister: make(chan *client.Client),
 		Broadcast:  make(chan []byte),
 		clients:    make(map[*client.Client]bool),
 	}
+
+	status.Reset(&hub.gameStatus)
+
+	return hub
 }
 
 func (h *Hub) Run() {
@@ -119,4 +122,11 @@ func (h *Hub) registerMessage(msg core.Message) {
 	case core.TypeReset:
 		status.Reset(&h.gameStatus)
 	}
+
+	log.Debug().
+		Str("lobby", h.lobby).
+		Str("type", msg.Type).
+		Str("payload", msg.Payload).
+		Str("status", status.Serialize(h.gameStatus)).
+		Msg("status update")
 }
