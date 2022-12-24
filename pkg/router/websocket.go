@@ -19,11 +19,23 @@ func serveWebsocket(hub *hub.Hub, w http.ResponseWriter, r *http.Request, allowe
 		return
 	}
 
-	client := &client.Client{Conn: conn, Send: make(chan []byte, 256)}
-	hub.Register <- client
+	currentClient := &client.Client{
+		Conn: conn,
+		Send: make(chan []byte, 256),
+	}
 
-	go client.WritePump()
-	go client.ReadPump()
+	hub.Register <- currentClient
+
+	currentClient.UnregisterFn = func() {
+		hub.Unregister <- currentClient
+	}
+
+	currentClient.BroadcastFn = func(message []byte) {
+		hub.Broadcast <- message
+	}
+
+	go currentClient.WritePump()
+	go currentClient.ReadPump()
 }
 
 var upgrader = websocket.Upgrader{
@@ -35,14 +47,4 @@ func originChecker(allowedHosts []string) func(*http.Request) bool {
 	return func(r *http.Request) bool {
 		return contains(allowedHosts, r.Header.Get("Origin"))
 	}
-}
-
-func contains(haystack []string, needle string) bool {
-	for _, item := range haystack {
-		if item == needle {
-			return true
-		}
-	}
-
-	return false
 }
