@@ -6,11 +6,9 @@ package hub
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/oslokommune/bordtennis-nexus-service/pkg/client"
 	"github.com/oslokommune/bordtennis-nexus-service/pkg/core"
-	"github.com/oslokommune/bordtennis-nexus-service/pkg/status"
 	"github.com/rs/zerolog/log"
 )
 
@@ -18,7 +16,7 @@ import (
 // clients.
 type Hub struct {
 	lobby      string
-	gameStatus status.Data
+	gameStatus status
 
 	// Registered clients.
 	clients map[*client.Client]bool
@@ -36,14 +34,14 @@ type Hub struct {
 func New(lobby string) *Hub {
 	hub := &Hub{
 		lobby:      lobby,
-		gameStatus: status.Data{},
+		gameStatus: status{},
 		Register:   make(chan *client.Client),
 		Unregister: make(chan *client.Client),
 		Broadcast:  make(chan []byte),
 		clients:    make(map[*client.Client]bool),
 	}
 
-	status.Reset(&hub.gameStatus)
+	hub.gameStatus.Reset()
 
 	return hub
 }
@@ -61,7 +59,7 @@ func (h *Hub) Run() {
 			msg := core.Message{
 				Origin:  "server",
 				Type:    core.TypeStatus,
-				Payload: status.Serialize(h.gameStatus),
+				Payload: h.gameStatus.Serialize(),
 			}
 
 			rawMessage, err := json.Marshal(msg)
@@ -91,6 +89,13 @@ func (h *Hub) Run() {
 				continue
 			}
 
+			err = msg.Validate()
+			if err != nil {
+				logEvent.Err(err).Msg("msg.Validate")
+
+				continue
+			}
+
 			logEvent.Str("event", "broadcast")
 			logEvent.RawJSON("message", message)
 			h.registerMessage(msg)
@@ -107,26 +112,4 @@ func (h *Hub) Run() {
 
 		logEvent.Msg("hub:Run()")
 	}
-}
-
-func (h *Hub) registerMessage(msg core.Message) {
-	switch msg.Type {
-	case core.TypeBumpTeam:
-		if msg.Payload == "1" {
-			h.gameStatus.TeamOne++
-		} else if "2" == msg.Payload {
-			h.gameStatus.TeamTwo++
-		} else {
-			log.Warn().Msg(fmt.Sprintf("invalid payload %s, ignoring", msg.Payload))
-		}
-	case core.TypeReset:
-		status.Reset(&h.gameStatus)
-	}
-
-	log.Debug().
-		Str("lobby", h.lobby).
-		Str("type", msg.Type).
-		Str("payload", msg.Payload).
-		Str("status", status.Serialize(h.gameStatus)).
-		Msg("status update")
 }
