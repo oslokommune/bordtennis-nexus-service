@@ -22,8 +22,6 @@ const (
 	TypeStatus = "status"
 )
 
-var allTypes = []string{TypeBumpTeam, TypeReset, TypeStatus, TypeChangeServer}
-
 type Message struct {
 	// Origin identifies the source of the event, usually an UUID
 	Origin  string `json:"origin"`
